@@ -8,6 +8,10 @@ from terminal.menu import draw_main_menu
 from engine.commands.parser import execute
 
 
+INPUT_WIDTH = 70
+MAX_COMMAND_LENGTH = 512
+
+
 def show_message(screen, title, message):
 
     screen.clear()
@@ -33,19 +37,26 @@ def run_terminal(stdscr):
 
     history = []
     current_history = 0
+    pending_command = ""
 
     while True:
 
         draw_main_menu(screen)
 
-        command = ""
-        cursor = 5
+        # Command preloaded by F9 (Retrieve), otherwise empty
+        command = pending_command
+        pending_command = ""
+        cursor = 5 + len(command)
 
         while True:
 
-            screen.write(19, 5, " " * 70)
-            screen.write(19, 5, command)
-            screen.stdscr.move(19, 5 + cursor - 5)
+            # Horizontal scroll: show the tail of long commands
+            offset = max(0, len(command) - (INPUT_WIDTH - 1))
+            visible = command[offset:]
+
+            screen.write(19, 5, " " * INPUT_WIDTH)
+            screen.write(19, 5, visible)
+            screen.stdscr.move(19, 5 + len(visible))
             screen.refresh()
 
             key = screen.stdscr.getch()
@@ -107,8 +118,7 @@ def run_terminal(stdscr):
             elif key == curses.KEY_F9:
 
                 if history:
-                    command = history[-1]
-                    cursor = 5 + len(command)
+                    pending_command = history[-1]
 
                 break
 
@@ -179,7 +189,7 @@ def run_terminal(stdscr):
             # Printable characters
             elif 32 <= key <= 126:
 
-                if len(command) < 70:
+                if len(command) < MAX_COMMAND_LENGTH:
                     command += chr(key)
                     cursor = 5 + len(command)
 
