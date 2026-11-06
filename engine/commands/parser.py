@@ -1,6 +1,9 @@
 
 import re
 
+import subprocess
+from pathlib import Path
+
 from engine.objects.file_manager import (
     create_physical_file,
     create_logical_file,
@@ -120,6 +123,20 @@ def execute(command):
             print("Required parameter FILE missing.")
 
         return True
+        
+    # -------------------------------------------------
+    # CALL PROGRAM
+    # -------------------------------------------------
+    if re.match(r"^CALL\b", command, re.IGNORECASE):
+
+        program_name = get_parameter(command, "PGM")
+
+        if not program_name:
+            print("Required parameter PGM missing.")
+        else:
+            print(execute_program(program_name))
+
+        return True
 
     # EXIT
 
@@ -139,6 +156,8 @@ Available commands:
   CRTLF FILE(lib/file) BASE(lib/file) ORDERBY(field,...)
   DSPFD FILE(lib/file)
   DSPFFD FILE(lib/file)
+
+  CALL PGM(lib/program)
                             
   HELP
   EXIT
@@ -150,3 +169,55 @@ Available commands:
 
     return True
 
+def execute_program(program_reference):
+    """
+    Execute a compiled COBOL program.
+
+    Example:
+        GANADERIA/HELLO
+    """
+
+    parts = program_reference.upper().split("/")
+
+    if len(parts) != 2:
+        return "Invalid program reference. Use LIBRARY/PROGRAM."
+
+    library, program = parts
+
+    if not re.fullmatch(r"[A-Z0-9_]{1,10}", library):
+        return "Invalid library name."
+
+    if not re.fullmatch(r"[A-Z0-9_]{1,10}", program):
+        return "Invalid program name."
+
+    base_dir = Path(__file__).resolve().parents[2]
+
+    executable = base_dir / "cobol" / "bin" / program.lower()
+
+    if not executable.is_file():
+        return f"Program {library}/{program} not found. Compile it first."
+
+    try:
+        result = subprocess.run(
+            [str(executable)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(base_dir)
+        )
+
+        output = result.stdout or ""
+
+        if result.stderr:
+            output += "\nERROR OUTPUT:\n" + result.stderr
+
+        if result.returncode != 0:
+            output += f"\nProgram ended with return code {result.returncode}."
+
+        return output.strip() or "Program executed successfully."
+
+    except subprocess.TimeoutExpired:
+        return "Program execution timeout."
+
+    except Exception as error:
+        return f"Program execution error: {error}"
